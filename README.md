@@ -16,6 +16,11 @@ This extension allows to "chain" together songs in a playlist that should reprod
 - [ ] Add symbols to recognize chained songs directly on the playlist
 
 ---
+# Installation
+## Spicetify Marketplace
+Follow [Spicetify Marketplace](https://github.com/spicetify/spicetify-marketplace) readme for installation. Then simply search for `Shuffle in Chains` and install!
+
+
 ## Manual Installation
 1. Copy `shuffle-in-chains.js` into your [Spicetify](https://github.com/spicetify/spicetify-cli) extensions directory:
 
@@ -32,11 +37,6 @@ spicetify apply
 ```
 
 
-## Also get it on Spicetify Marketplace 
-> [!IMPORTANT]
-> Coming Soon
-
-Follow [Spicetify Marketplace](https://github.com/spicetify/spicetify-marketplace) readme for installation. Then simply search for `shuffle in chains` and install!
 
 ---
 ## Made with Spicetify Creator
