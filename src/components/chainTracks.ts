@@ -8,26 +8,57 @@ interface QueueTrack {
 }
 
 /**
+ * Check if required APIs are available
+ */
+function checkAPIsAvailable(): boolean {
+    if (!Spicetify?.Player?.getShuffle) {
+        console.warn("[Chain Enforcer] getShuffle API not available");
+        return false;
+    }
+    if (!Spicetify?.Platform?.PlayerAPI) {
+        console.warn("[Chain Enforcer] PlayerAPI not available");
+        return false;
+    }
+    return true;
+}
+
+/**
  * Check if shuffle mode is enabled
  */
 function isShuffleModeEnabled(): boolean {
-    return Spicetify.Player.getShuffle();
+    try {
+        return Spicetify.Player.getShuffle();
+    } catch (err) {
+        console.error("[Chain Enforcer] Failed to get shuffle status:", err);
+        return false;
+    }
 }
 
 /**
  * Get all chains for the current context
  */
 function getChainsForCurrentContext(): string[][] {
-    const rawContext = Spicetify.Player.data.context.uri;
-    const contextUri = normalizeUri(rawContext);
-    return ChainedSongsManager.getChains()[contextUri] || [];
+    try {
+        const rawContext = Spicetify.Player.data.context.uri;
+        const contextUri = normalizeUri(rawContext);
+        return ChainedSongsManager.getChains()[contextUri] || [];
+    } catch (err) {
+        console.error("[Chain Enforcer] Failed to get chains:", err);
+        return [];
+    }
 }
 
 /**
  * Get the next tracks from the queue
  */
 async function getQueueNextTracks(): Promise<any[]> {
-    return (await Spicetify.Platform.PlayerAPI.getQueue()).nextUp || [];
+    try {
+        const queueData = await Spicetify.Platform.PlayerAPI.getQueue();
+        return queueData.nextUp || [];
+    } catch (err) {
+        console.error("[Chain Enforcer] Failed to get queue:", err);
+        throw err;
+    }
 }
 
 /**
@@ -42,10 +73,9 @@ function findChainAnchor(chain: string[], nextTracks: any[]): { uri: string; ind
     const anchor = queueUris.find((item: { uri: string }) => chain.includes(item.uri));
 
     if (!anchor) {
-        console.warn("None of the chained songs were found in the visible queue.");
+        console.warn("None of the chained songs found in queue");
         return null;
     }
-
     return anchor;
 }
 
@@ -56,28 +86,38 @@ async function insertSongIntoQueue(
     songUri: string,
     beforeTrack: { uri: string; uid: string }
 ): Promise<void> {
-    await Spicetify.Platform.PlayerAPI.insertIntoQueue(
-        [{ uri: songUri }],
-        {
-            before: {
-                uri: beforeTrack.uri,
-                uid: beforeTrack.uid
+    try {
+        await Spicetify.Platform.PlayerAPI.insertIntoQueue(
+            [{ uri: songUri }],
+            {
+                before: {
+                    uri: beforeTrack.uri,
+                    uid: beforeTrack.uid
+                }
             }
-        }
-    );
+        );
+    } catch (err) {
+        console.error("[Chain Enforcer] Failed to insert song:", err);
+        throw err;
+    }
 }
 
 /**
  * Get the UID of a song at a specific position in the queue
  */
 async function getUidAtPosition(position: number): Promise<string | null> {
-    // Small delay to ensure Spotify updates the queue with new UID
-    await new Promise(resolve => setTimeout(resolve, 100));
+    try {
+        // Small delay to ensure Spotify updates the queue with new UID
+        await new Promise(resolve => setTimeout(resolve, 100));
 
-    const updatedQueue = (await Spicetify.Platform.PlayerAPI.getQueue()).nextUp || [];
-    const track = updatedQueue[position];
+        const updatedQueue = (await Spicetify.Platform.PlayerAPI.getQueue()).nextUp || [];
+        const track = updatedQueue[position];
 
-    return track?.uid || null;
+        return track?.uid || null;
+    } catch (err) {
+        console.error("Failed to get UID at position:", err);
+        return null;
+    }
 }
 
 /**
@@ -91,7 +131,7 @@ async function moveExistingSong(
     movedSongsCorrectPosition: Map<string, string>
 ): Promise<void> {
     const songToMove = currentQueue.find((entry: any) => {
-        const foundUri = entry.uri;
+        const foundUri = entry.uri || entry.track?.uri;
         return foundUri === desiredUri;
     });
 
@@ -110,7 +150,6 @@ async function moveExistingSong(
     const newUid = await getUidAtPosition(targetPos);
     if (newUid) {
         movedSongsCorrectPosition.set(desiredUri, newUid);
-        console.log(`  Tracked correct UID: ${newUid} for ${desiredUri}`);
     }
 }
 
@@ -123,14 +162,12 @@ async function insertMissingSong(
     trackAtTarget: any,
     movedSongsCorrectPosition: Map<string, string>
 ): Promise<void> {
-    console.warn(`⚠️ Song not in queue: ${desiredUri}. Attempting to insert manually...`);
+    console.warn(`Song not in queue: ${desiredUri}. Inserting...`);
 
     await insertSongIntoQueue(desiredUri, {
         uri: trackAtTarget.uri,
         uid: trackAtTarget.uid
     });
-
-    console.log(`✅ Successfully inserted missing song: ${desiredUri}`);
 
     // Track the new UID
     const newUid = await getUidAtPosition(targetPos);
@@ -152,19 +189,19 @@ async function reorderChain(
         const desiredUri = chain[j];
         const targetPos = anchor.index + j;
 
-        // Re-fetch current state to ensure accuracy after previous moves
-        const currentQueue = (await Spicetify.Platform.PlayerAPI.getQueue()).nextUp || [];
-        const trackAtTarget = currentQueue[targetPos];
-        const trackAtTargetUri = trackAtTarget?.uri;
-
-        // Check if song is already in correct position
-        if (trackAtTargetUri === desiredUri) {
-            movedSongsCorrectPosition.set(desiredUri, trackAtTarget.uid);
-            continue;
-        }
-
-        // Try to move the song
         try {
+            // Re-fetch current state
+            const currentQueue = (await Spicetify.Platform.PlayerAPI.getQueue()).nextUp || [];
+            const trackAtTarget = currentQueue[targetPos];
+            const trackAtTargetUri = trackAtTarget?.uri || trackAtTarget?.track?.uri;
+
+            // Check if song is already in correct position
+            if (trackAtTargetUri === desiredUri) {
+                movedSongsCorrectPosition.set(desiredUri, trackAtTarget.uid);
+                continue;
+            }
+
+            // Try to move the song
             const songExists = currentQueue.find((entry: any) => {
                 const foundUri = entry.uri || entry.track?.uri;
                 return foundUri === desiredUri;
@@ -187,8 +224,8 @@ async function reorderChain(
                 );
             }
         } catch (err) {
-            console.error(`Failed to process song: ${desiredUri}`, err);
-            console.warn(`Skipping rest of this chain due to error.`);
+            console.error(`Failed to process ${desiredUri}:`, err);
+            Spicetify.showNotification(`Failed to chain song ${j + 1}`, true);
             break;
         }
     }
@@ -203,25 +240,28 @@ async function findDuplicates(
     chain: string[],
     movedSongsCorrectPosition: Map<string, string>
 ): Promise<QueueTrack[]> {
-    const finalQueue = (await Spicetify.Platform.PlayerAPI.getQueue()).nextUp || [];
-    const tracksToRemove: QueueTrack[] = [];
+    try {
+        const finalQueue = (await Spicetify.Platform.PlayerAPI.getQueue()).nextUp || [];
+        const tracksToRemove: QueueTrack[] = [];
 
-    for (const track of finalQueue) {
-        const trackUri = track.uri || track.track?.uri;
-        const trackUid = track.uid;
+        for (const track of finalQueue) {
+            const trackUri = track.uri || track.track?.uri;
+            const trackUid = track.uid;
 
-        // If this track is part of a chain
-        if (chain.includes(trackUri)) {
-            const correctUid = movedSongsCorrectPosition.get(trackUri);
+            if (chain.includes(trackUri)) {
+                const correctUid = movedSongsCorrectPosition.get(trackUri);
 
-            // If this is NOT the correctly positioned instance, mark for removal
-            if (correctUid && trackUid !== correctUid) {
-                tracksToRemove.push(track);
+                if (correctUid && trackUid !== correctUid) {
+                    tracksToRemove.push(track);
+                }
             }
         }
-    }
 
-    return tracksToRemove;
+        return tracksToRemove;
+    } catch (err) {
+        console.error("Failed to find duplicates:", err);
+        return [];
+    }
 }
 
 /**
@@ -238,7 +278,7 @@ async function removeDuplicates(tracksToRemove: QueueTrack[]): Promise<number> {
             }]);
             removedCount++;
         } catch (err) {
-            console.error(`Failed to remove duplicate: ${track.uri}`, err);
+            console.error(`Failed to remove duplicate:`, err);
         }
     }
 
@@ -249,37 +289,62 @@ async function removeDuplicates(tracksToRemove: QueueTrack[]): Promise<number> {
  * Process a single chain: reorder songs and remove duplicates
  */
 async function processChain(chain: string[], nextTracks: any[]): Promise<void> {
-    // Find the anchor point
-    const anchor = findChainAnchor(chain, nextTracks);
-    if (!anchor) {
-        return;
+    try {
+        // Find the anchor point
+        const anchor = findChainAnchor(chain, nextTracks);
+        if (!anchor) {
+            return;
+        }
+
+        // Reorder the chain
+        const movedSongsCorrectPosition = await reorderChain(chain, anchor);
+
+        // Cleanup duplicates
+        console.log("Starting duplicate cleanup...");
+        const duplicates = await findDuplicates(chain, movedSongsCorrectPosition);
+        const removedCount = await removeDuplicates(duplicates);
+        console.log(`Removed ${removedCount} duplicate(s)`);
+    } catch (err) {
+        console.error("Failed to process chain:", err);
+        throw err;
     }
-
-    const movedSongsCorrectPosition = await reorderChain(chain, anchor);
-
-    const duplicates = await findDuplicates(chain, movedSongsCorrectPosition);
-    await removeDuplicates(duplicates);
 }
 
 /**
  * Main function to enforce chain order in the queue
  */
 export async function enforceChainOrder(): Promise<void> {
+    try {
+        // Check APIs
+        if (!checkAPIsAvailable()) {
+            console.warn("Required APIs not available");
+            return;
+        }
 
-    if (!isShuffleModeEnabled()) {
-        return;
-    }
+        // Check if shuffle mode is enabled
+        if (!isShuffleModeEnabled()) {
+            console.groupEnd();
+            return;
+        }
 
-    const allChains = getChainsForCurrentContext();
-    if (allChains.length === 0) {
-        console.log("No chains found for current context.");
-        console.groupEnd();
-        return;
-    }
+        // Get chains for current context
+        const allChains = getChainsForCurrentContext();
+        if (allChains.length === 0) {
+            console.log("No chains found");
+            console.groupEnd();
+            return;
+        }
 
-    const nextTracks = await getQueueNextTracks();
+        // Get queue tracks
+        const nextTracks = await getQueueNextTracks();
 
-    for (const chain of allChains) {
-        await processChain(chain, nextTracks);
+        // Process each chain
+        for (const chain of allChains) {
+            await processChain(chain, nextTracks);
+        }
+
+    } catch (err) {
+        console.error("Fatal error:", err);
+        Spicetify.showNotification("Failed to enforce song chains", true);
     }
 }

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Shuffle-in-Chains",
+    "description": "Spicetify extension to reproduce linked songs in shuffle mode.",
+    "preview": "screenshot.png",
+    "main": "shuffleInChains.js",
+    "readme": "README.md",
+    "authors": [
+        { "name": "Facundo Mourelle", "url": "https://github.com/Facundo-Mourelle" }
+    ]
+  }
+]
