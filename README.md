@@ -22,7 +22,7 @@ Follow [Spicetify Marketplace](https://github.com/spicetify/spicetify-marketplac
 
 
 ## Manual Installation
-1. Copy `shuffle-in-chains.js` into your [Spicetify](https://github.com/spicetify/spicetify-cli) extensions directory:
+1. Copy `shuffleInChains.js` into your [Spicetify](https://github.com/spicetify/spicetify-cli) extensions directory:
 
 | **Platform** | **Path** |
 |------------|-----------------------------------------------------------------------------------|
