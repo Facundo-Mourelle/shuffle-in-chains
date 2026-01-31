@@ -2,7 +2,8 @@
 
 This extension allows to "chain" together songs in a playlist that should reproduce one after the other in shuffle mode.
 
->[!NOTE] The reordering of the playlist occurs when changing songs.
+> [!CAUTION]
+> The reordering of the playlist occurs when changing songs.
 
 ## Features
 - Chain 2 or more songs together
@@ -17,6 +18,7 @@ This extension allows to "chain" together songs in a playlist that should reprod
 ---
 ## Manual Installation
 1. Copy `shuffle-in-chains.js` into your [Spicetify](https://github.com/spicetify/spicetify-cli) extensions directory:
+
 | **Platform** | **Path** |
 |------------|-----------------------------------------------------------------------------------|
 | **Linux** | `~/.config/spicetify/Extensions` or `$XDG_CONFIG_HOME/.config/spicetify/Extensions/` |
@@ -29,8 +31,10 @@ spicetify config extensions shuffle-in-chains.js
 spicetify apply
 ```
 
->[!Warning] Coming Soon
+
 ## Also get it on Spicetify Marketplace 
+> [!IMPORTANT]
+> Coming Soon
 
 Follow [Spicetify Marketplace](https://github.com/spicetify/spicetify-marketplace) readme for installation. Then simply search for `shuffle in chains` and install!
 
